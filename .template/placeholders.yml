@@ -149,7 +149,9 @@ rename:
     replace_in:
       - pyproject.toml                       # [project].name
       - catalog-info.yml                     # metadata.name + project-slug/image repo
-      - deploy/k8s/**                        # app.kubernetes.io/name labels + selectors + image repo + DD service
+      - deploy/k8s/**                        # app.kubernetes.io/name labels + selectors + image repo + DD service + ExternalSecret extract.key
+      - deploy/argocd/**                     # Application source.path/repoURL + ClusterSecretStore
+      - .github/workflows/sync-secrets.yml   # Secrets Manager secret id k8s-fastapi-starter/<env>/app-secrets
       - src/app/main.py                      # FastAPI title
       - src/app/config.py                    # dd_service default
       - src/app/__init__.py                  # package docstring
@@ -205,10 +207,12 @@ runtime:
 # -----------------------------------------------------------------------------
 external:
   - id: AWS_DEPLOY_ROLE_ARN
-    description: IAM role CD assumes via OIDC. Set as a GitHub Environment variable.
+    description: >-
+      IAM role the sync-secrets workflow assumes via OIDC to write secrets to AWS
+      Secrets Manager. Set as a GitHub Environment variable.
     where: GitHub repo -> Settings -> Environments -> dev/prod -> Variables
-    referenced_in: .github/workflows/deploy.yml
+    referenced_in: .github/workflows/sync-secrets.yml
   - id: AWS_REGION
-    description: AWS region for the deploy. Set as a GitHub Environment variable.
+    description: AWS region for the sync-secrets workflow. Set as a GitHub Environment variable.
     where: GitHub repo -> Settings -> Environments -> dev/prod -> Variables
-    referenced_in: .github/workflows/deploy.yml
+    referenced_in: .github/workflows/sync-secrets.yml
