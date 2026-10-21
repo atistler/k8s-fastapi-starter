@@ -1,0 +1,25 @@
+# kube-linter configuration for deploy/k8s (SPEC.md section 6, K8s security gate).
+#
+# Run with: kube-linter lint --config deploy/k8s/.kube-linter.yaml <rendered-manifests>
+#
+# Uses kube-linter's default check set (security-focused). Opinionated checks
+# (node affinity, owner labels, DNS config, and similar) are not enabled.
+# Any exclusion MUST be listed below with a written reason (SPEC.md section 14,
+# item 9).
+checks:
+  doNotAutoAddDefaults: false
+  exclude:
+    # The backup CronJob's image is PLACEHOLDER_BACKUP_IMAGE — a FILL token that
+    # must stay a bare, untagged string so the template builds and `rg
+    # PLACEHOLDER_` finds it pre-init. kube-linter's latest-tag BlockList treats
+    # any untagged reference as "latest". The consumer replaces the token with a
+    # real image pinned BY DIGEST at init (documented in docs/deployment.md), so
+    # this is a template artifact, not a real floating-tag deployment.
+    - "latest-tag"
+    # The backup CronJob sets jobTemplate ttlSecondsAfterFinished to reap
+    # finished backup Jobs promptly (a backstop alongside
+    # successful/failedJobsHistoryLimit). kube-linter warns the two mechanisms
+    # can interact; here that is intentional and harmless — the stricter of the
+    # two wins and both only ever DELETE finished Jobs, so no live backup is
+    # affected. Keeping ttlSecondsAfterFinished is a deliberate requirement.
+    - "job-ttl-seconds-after-finished"

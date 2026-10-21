@@ -1,0 +1,214 @@
+# Template placeholder registry
+# =============================================================================
+# This file is the machine-readable source of truth for turning this STARTER
+# template into a real repository. An AI agent (or a person) reads it, collects
+# a value for each entry, applies the replacements, then deletes the .template/
+# directory. See AGENTS.md -> "Creating a real repository from this template".
+#
+# Placeholder format: FILL tokens are UPPER_SNAKE_CASE with a mandatory
+# `PLACEHOLDER_` prefix, e.g. PLACEHOLDER_GITHUB_ORG. They are valid as plain
+# strings in YAML/TOML/Python/Markdown, so the template still builds and passes
+# CI before initialization. Find them all with:  rg PLACEHOLDER_
+# =============================================================================
+
+format:
+  token_regex: '\bPLACEHOLDER_[A-Z0-9_]+\b'
+  find_command: "rg PLACEHOLDER_"
+  rule: >-
+    Every FILL placeholder is a PLACEHOLDER_* token. Replace the whole token.
+    RENAME entries are working defaults (no token) that must be changed to the
+    new project's identity. KEEP entries are intentionally generic. RUNTIME and
+    EXTERNAL entries are NOT set during init (CD or the GitHub/cloud console set
+    them). After init, `rg PLACEHOLDER_` must return nothing.
+
+# -----------------------------------------------------------------------------
+# FILL: PLACEHOLDER_* tokens with no sensible default. Must be replaced.
+# -----------------------------------------------------------------------------
+fill:
+  - id: PLACEHOLDER_GITHUB_ORG
+    description: GitHub organization (or user) that owns the repository.
+    example: my-github-org
+    files:
+      - catalog-info.yml
+      - deploy/k8s/base/deployment.yaml
+      - deploy/k8s/base/migration-job.yaml
+      - deploy/k8s/overlays/dev/kustomization.yaml
+      - deploy/k8s/overlays/prod/kustomization.yaml
+
+  - id: PLACEHOLDER_OWNER_TEAM
+    description: Backstage group that owns the component (spec.owner).
+    example: platform-team
+    files: [catalog-info.yml]
+
+  - id: PLACEHOLDER_BACKSTAGE_SYSTEM
+    description: Backstage System the component belongs to (spec.system).
+    example: payments
+    files: [catalog-info.yml]
+
+  - id: PLACEHOLDER_AUTHOR_NAME
+    description: Project author / maintainer name (pyproject [project].authors).
+    example: Jane Doe
+    files: [pyproject.toml]
+
+  - id: PLACEHOLDER_AUTHOR_EMAIL
+    description: >-
+      Author email. In the file it is written PLACEHOLDER_AUTHOR_EMAIL@example.invalid
+      so the template builds; replace the ENTIRE address (local part and the
+      example.invalid domain) with the real address.
+    example: jane.doe@example.com
+    files: [pyproject.toml]
+
+  - id: PLACEHOLDER_AWS_REGION
+    description: >-
+      AWS region of the KMS key used by SOPS, and the region
+      scripts/bootstrap_backups.py provisions the backup bucket/CMK in.
+    example: us-east-1
+    files: [.sops.yaml, scripts/bootstrap_backups.py]
+
+  - id: PLACEHOLDER_AWS_ACCOUNT_ID
+    description: AWS account ID that holds the KMS key.
+    example: "123456789012"
+    files: [.sops.yaml]
+
+  - id: PLACEHOLDER_KMS_KEY_ID
+    description: KMS key id (or use an alias ARN instead of the full arn line).
+    example: 1234abcd-12ab-34cd-56ef-1234567890ab
+    files: [.sops.yaml]
+
+  - id: PLACEHOLDER_DB_PASSWORD
+    description: >-
+      Postgres password. Appears ONLY in the example secret files, which are
+      never applied. Real values go in SOPS-encrypted secrets.<env>.yaml created
+      with `sops`, not here. Leave the examples as placeholders or delete them.
+    example: (set via sops, not committed in plaintext)
+    files:
+      - deploy/k8s/overlays/dev/secrets.example.yaml
+      - deploy/k8s/overlays/prod/secrets.example.yaml
+
+  - id: PLACEHOLDER_REDIS_PASSWORD
+    description: Redis password. Same rules as PLACEHOLDER_DB_PASSWORD.
+    example: (set via sops, not committed in plaintext)
+    files:
+      - deploy/k8s/overlays/dev/secrets.example.yaml
+      - deploy/k8s/overlays/prod/secrets.example.yaml
+
+  - id: PLACEHOLDER_BACKUP_BUCKET
+    description: >-
+      S3 bucket name holding daily pg_dump backups. Provisioned by
+      scripts/bootstrap_backups.py and written by the db-backup CronJob.
+    example: my-org-payments-api-backups
+    files:
+      - deploy/k8s/base/backup-cronjob.yaml
+      - scripts/bootstrap_backups.py
+
+  - id: PLACEHOLDER_BACKUP_IMAGE
+    description: >-
+      Container image for the backup CronJob, carrying the Postgres 17 client
+      (pg_dump) AND the AWS CLI v2. The template does not build this; supply or
+      mirror one and PIN IT BY DIGEST (image@sha256:...).
+    example: ghcr.io/my-org/pg-backup@sha256:<digest>
+    files: [deploy/k8s/base/backup-cronjob.yaml]
+
+  - id: PLACEHOLDER_BACKUP_KMS_KEY_ID
+    description: >-
+      KMS key id (or alias/ARN) of the backup-only CMK used for S3 SSE-KMS.
+      Provisioned by scripts/bootstrap_backups.py. Distinct from the SOPS KMS
+      key in .sops.yaml.
+    example: 1234abcd-12ab-34cd-56ef-1234567890ab
+    files:
+      - deploy/k8s/base/backup-cronjob.yaml
+      - scripts/bootstrap_backups.py
+
+  - id: PLACEHOLDER_BACKUP_KMS_ALIAS
+    description: >-
+      Alias for the backup CMK (bootstrap_backups.py default is
+      alias/PLACEHOLDER_BACKUP_KMS_ALIAS). Replace the token part.
+    example: payments-api-backups
+    files: [scripts/bootstrap_backups.py]
+
+  - id: PLACEHOLDER_BACKUP_ROLE_ARN
+    description: >-
+      IAM role ARN the backup ServiceAccount assumes via IRSA (S3 PutObject +
+      KMS Encrypt on the backup bucket/key). Set on the `backup` SA annotation.
+    example: arn:aws:iam::123456789012:role/payments-api-backup
+    files: [deploy/k8s/base/backup-serviceaccount.yaml]
+
+# -----------------------------------------------------------------------------
+# RENAME: working defaults (NOT tokens). Change to the new project's identity.
+# They must stay valid in context (DNS-1123 labels, Python dist name), so they
+# are real strings, not PLACEHOLDER_* tokens.
+# -----------------------------------------------------------------------------
+rename:
+  - id: PROJECT_SLUG
+    description: >-
+      The service slug. Must be a valid DNS-1123 label AND a valid Python
+      distribution name (lowercase, digits, hyphens). It is also the GitHub repo
+      name (the part after PLACEHOLDER_GITHUB_ORG/ in project-slug and image).
+    default: k8s-fastapi-starter
+    example: payments-api
+    replace_in:
+      - pyproject.toml                       # [project].name
+      - catalog-info.yml                     # metadata.name + project-slug/image repo
+      - deploy/k8s/**                        # app.kubernetes.io/name labels + selectors + image repo + DD service
+      - src/app/main.py                      # FastAPI title
+      - src/app/config.py                    # dd_service default
+      - src/app/__init__.py                  # package docstring
+      - docs/monitoring.md                   # DD_SERVICE examples
+      - tests/unit/test_datadog.py           # dd_service assertion
+      - tests/unit/test_logging.py           # dd.service sample value
+    keep_as_is:
+      # These describe the TEMPLATE itself, not the new service. Do not rename.
+      - SPEC.md
+      - README.md
+      - AGENTS.md
+      - .template/**
+      - CHANGELOG.md
+
+  - id: PROJECT_TITLE
+    description: Human-readable display name (Backstage title).
+    default: K8s FastAPI starter
+    example: Payments API
+    replace_in: [catalog-info.yml]
+
+  - id: PROJECT_DESCRIPTION
+    description: One-line project description.
+    default: Template FastAPI service backed by PostgreSQL and Redis, deployed to Kubernetes.
+    example: Payments processing API.
+    replace_in: [pyproject.toml, catalog-info.yml]
+
+# -----------------------------------------------------------------------------
+# KEEP: intentionally generic. Do NOT rename during init.
+# -----------------------------------------------------------------------------
+keep:
+  - id: IMPORT_PACKAGE
+    value: app
+    reason: >-
+      The Python import package stays `app` (e.g. `from app.config import ...`).
+      Renaming it touches every import for no real benefit; it is internal and
+      not user-facing.
+
+# -----------------------------------------------------------------------------
+# RUNTIME: set by CI/CD at build or deploy time, NOT during init.
+# -----------------------------------------------------------------------------
+runtime:
+  - id: IMAGE_TAG
+    value: "0.0.0"
+    set_by: CD (release.yml tags the image; overlays patch the version label)
+    files:
+      - deploy/k8s/base/deployment.yaml
+      - deploy/k8s/base/migration-job.yaml
+      - deploy/k8s/overlays/dev/kustomization.yaml
+      - deploy/k8s/overlays/prod/kustomization.yaml
+
+# -----------------------------------------------------------------------------
+# EXTERNAL: configured outside the repo (GitHub console / cloud), NOT in files.
+# -----------------------------------------------------------------------------
+external:
+  - id: AWS_DEPLOY_ROLE_ARN
+    description: IAM role CD assumes via OIDC. Set as a GitHub Environment variable.
+    where: GitHub repo -> Settings -> Environments -> dev/prod -> Variables
+    referenced_in: .github/workflows/deploy.yml
+  - id: AWS_REGION
+    description: AWS region for the deploy. Set as a GitHub Environment variable.
+    where: GitHub repo -> Settings -> Environments -> dev/prod -> Variables
+    referenced_in: .github/workflows/deploy.yml

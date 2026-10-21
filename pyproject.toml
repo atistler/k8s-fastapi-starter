@@ -38,7 +38,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "RUF", "ASYNC"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src", "tests", "migrations"]
+files = ["src", "tests", "migrations", "scripts"]
 mypy_path = "src"
 
 [tool.pydantic-mypy]
@@ -58,6 +58,8 @@ addopts = "-p no:ddtrace"
 
 [dependency-groups]
 dev = [
+    "boto3>=1.43.116",
+    "boto3-stubs[kms,s3]>=1.43.116",
     "httpx>=0.28.1",
     "mypy>=2.4.0",
     "poethepoet>=0.49.0",
@@ -165,7 +167,7 @@ kubeconform -strict -summary \
   -skip 'Namespace,ServiceAccount,ConfigMap,Secret,Service,Deployment,Job,CronJob,NetworkPolicy,PodDisruptionBudget,HorizontalPodAutoscaler' \
   "$tmp/argocd.yaml" "$tmp/dev.yaml" "$tmp/prod.yaml"
 
-kube-linter lint "$tmp/dev.yaml" "$tmp/prod.yaml"
+kube-linter lint --config deploy/k8s/.kube-linter.yaml "$tmp/dev.yaml" "$tmp/prod.yaml"
 """
 
 [tool.poe.tasks.docs]

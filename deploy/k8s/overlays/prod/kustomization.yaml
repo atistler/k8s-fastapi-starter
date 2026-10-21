@@ -92,3 +92,12 @@ patches:
           limits:
             cpu: "1"
             memory: 512Mi
+  # Mandatory: set the backup S3 prefix to this environment so dev and prod
+  # dumps never collide under the same bucket (s3://…/prod/…).
+  - target:
+      kind: CronJob
+      name: db-backup
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: prod

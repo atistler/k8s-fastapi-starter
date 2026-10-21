@@ -60,3 +60,12 @@ patches:
       - op: replace
         path: /metadata/name
         value: app-migrate-dev
+  # Mandatory: set the backup S3 prefix to this environment so dev and prod
+  # dumps never collide under the same bucket (s3://…/dev/…).
+  - target:
+      kind: CronJob
+      name: db-backup
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: dev

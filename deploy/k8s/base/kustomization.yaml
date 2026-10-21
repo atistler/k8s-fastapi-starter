@@ -1,0 +1,20 @@
+# Base manifests for the FastAPI service. Overlays under ../overlays/ set the
+# namespace, image tag, replica count, and environment-specific values.
+#
+# Secrets are NOT listed here. The `app-secrets` Secret is materialized by the
+# External Secrets Operator from the per-overlay ExternalSecret (externalsecret.yaml),
+# which points at AWS Secrets Manager — not applied by CD and not a resource of
+# this base. The ExternalSecret is namespaced, so it lives in the overlays, not
+# here; see the overlay kustomization.yaml files and SPEC.md section 9.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - serviceaccount.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+  - migration-job.yaml
+  - backup-serviceaccount.yaml
+  - backup-cronjob.yaml

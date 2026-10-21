@@ -1,0 +1,104 @@
+# Daily database backup: pg_dump of DATABASE_URL streamed to S3 (SPEC.md).
+#
+# Runs at 03:00 UTC every day. `concurrencyPolicy: Forbid` prevents overlapping
+# runs if one backup is slow. The pod streams `pg_dump | gzip` straight to
+# `aws s3 cp -`, so no large dump file ever touches disk and readOnlyRootFilesystem
+# can stay true (only /tmp is writable, for the AWS CLI's scratch space).
+#
+# LABELS: the pod template carries app.kubernetes.io/name: k8s-fastapi-starter
+# because the `app` NetworkPolicy's podSelector matches on that label. Without
+# it the policy does not select this pod and its egress to Postgres (5432) and
+# to S3/STS/KMS/Secrets Manager (443) is denied, so every backup silently fails.
+# app.kubernetes.io/component: backup is identity/filtering only.
+#
+# BACKUP_PREFIX: the base value `base` is a neutral placeholder; each overlay
+# MUST patch it to its environment name (dev/prod) so dumps never collide in the
+# bucket. serviceAccountName: backup provides the IRSA identity (S3 + KMS write).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  labels:
+    app.kubernetes.io/name: k8s-fastapi-starter
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: k8s-fastapi-starter
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              # Dedicated image carrying the Postgres 17 client (pg_dump) AND the
+              # AWS CLI v2 — the app image (python:3.13-slim) has neither. The
+              # template does not build this; the consumer supplies it and should
+              # pin it by digest. See docs/deployment.md.
+              image: PLACEHOLDER_BACKUP_IMAGE
+              imagePullPolicy: IfNotPresent
+              # Stream pg_dump | gzip straight to S3 with SSE-KMS (the backup CMK).
+              # set -euo pipefail so a pg_dump failure fails the whole pipe/Job.
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  pg_dump "$DATABASE_URL" | gzip | \
+                    aws s3 cp - \
+                      "s3://PLACEHOLDER_BACKUP_BUCKET/${BACKUP_PREFIX}/db/${ts}.sql.gz" \
+                      --sse aws:kms \
+                      --sse-kms-key-id PLACEHOLDER_BACKUP_KMS_KEY_ID
+              env:
+                # Patched per overlay to the environment name (dev/prod) so the
+                # S3 key prefix never collides across environments.
+                - name: BACKUP_PREFIX
+                  value: base
+                # Short-lived batch pod; no APM tracer needed.
+                - name: DD_TRACE_ENABLED
+                  value: "false"
+              envFrom:
+                # DATABASE_URL comes from the ESO-managed app-secrets Secret.
+                - secretRef:
+                    name: app-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                capabilities:
+                  drop:
+                    - ALL
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 128Mi

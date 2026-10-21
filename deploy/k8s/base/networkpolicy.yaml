@@ -1,0 +1,83 @@
+# Applies to the API pods and the migration Job pods (both carry the
+# app.kubernetes.io/name label).
+#
+# Ingress: only pods in the same namespace may reach the API port.
+#   KUBELET PROBES: liveness/readiness/startup probes originate from the NODE,
+#   not a pod, so this same-namespace rule does not explicitly admit them. Most
+#   CNIs (Calico, Cilium) exempt kubelet health-check traffic by default, so
+#   probes work. On a CNI that polices node->pod traffic, add an ipBlock for the
+#   node/pod CIDR (example below) or probes will fail and pods CrashLoop.
+#   An Ingress/Gateway controller lives in another namespace and is likewise NOT
+#   admitted; when you add ingress (SPEC §13 Q7), add a rule selecting its
+#   namespace.
+# Egress: DNS, PostgreSQL (5432), Redis (6379), and the node-local Datadog
+#   Agent on the APM (8126/TCP) and DogStatsD (8125/UDP) ports. These
+#   destinations are selected by port only, because they may be in-cluster
+#   Services, the node host IP (DD_AGENT_HOST=status.hostIP), or external
+#   endpoints, and NetworkPolicy cannot select "the pod's own node" directly.
+#   This permits egress to ANY IP on those ports. TIGHTEN per environment by
+#   adding a `to:` selector (podSelector/namespaceSelector for in-cluster
+#   Postgres/Redis, or an ipBlock for managed endpoints) — see the commented
+#   example below. The DNS rule assumes CoreDNS runs in `kube-system`; adjust
+#   the namespace on other platforms (e.g. OpenShift).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: k8s-fastapi-starter
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-fastapi-starter
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Uncomment on a CNI that polices node->pod traffic so kubelet probes reach
+    # :8000. Replace the CIDR with your node/pod CIDR.
+    # - from:
+    #     - ipBlock:
+    #         cidr: 10.0.0.0/8
+    #   ports:
+    #     - protocol: TCP
+    #       port: 8000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # TIGHTEN per environment: add a `to:` selector so egress is not open to any
+    # IP on these ports, e.g.:
+    #   to:
+    #     - podSelector: { matchLabels: { app.kubernetes.io/name: postgres } }
+    #     - ipBlock: { cidr: 10.1.2.0/24 }   # managed DB/Redis/agent endpoints
+    # When adding a `to:` selector, any future tightening MUST preserve the
+    # backup CronJob pod's egress to Postgres (5432) and to 443 (S3, STS, KMS,
+    # Secrets Manager) — the backup pod is selected by this policy too, and
+    # losing either destination makes every backup silently fail.
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        # Datadog Agent: APM trace intake (8126/TCP) and DogStatsD metrics
+        # (8125/UDP, used by DD_RUNTIME_METRICS_ENABLED).
+        - protocol: TCP
+          port: 8126
+        - protocol: UDP
+          port: 8125
+        # The backup CronJob pod (same NetworkPolicy selector) needs 443 for S3,
+        # STS (IRSA AssumeRoleWithWebIdentity), KMS, and Secrets Manager endpoints.
+        - protocol: TCP
+          port: 443
