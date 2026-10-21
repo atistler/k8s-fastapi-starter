@@ -1,0 +1,28 @@
+# Argo CD Application: prod
+#
+# Same shape as application-dev.yaml, pointing at the prod overlay and the
+# fastapi-starter-prod namespace. See application-dev.yaml for the notes on
+# metadata.namespace (argocd) and spec.project (default).
+#
+# THE ONLY DIFFERENCE FROM DEV: spec.syncPolicy omits `automated` entirely, so
+# prod has no auto-sync, no auto-prune, and no self-heal — an operator syncs
+# prod manually after review (mirroring the "required reviewers for prod"
+# posture). syncOptions.CreateNamespace is kept (outside `automated`, so it
+# still applies to the manual sync).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-fastapi-starter-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter.git
+    path: deploy/k8s/overlays/prod
+    targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fastapi-starter-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

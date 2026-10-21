@@ -1,0 +1,207 @@
+[project]
+name = "k8s-fastapi-starter"
+version = "0.1.0"
+description = "Template FastAPI service backed by PostgreSQL and Redis, deployed to Kubernetes."
+# Placeholders: replace when creating a real repo (see .template/placeholders.yml).
+# The email keeps a valid RFC addr-spec (…@example.invalid) so the template still builds.
+authors = [{ name = "PLACEHOLDER_AUTHOR_NAME", email = "PLACEHOLDER_AUTHOR_EMAIL@example.invalid" }]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.32.0",
+    "ddtrace>=4.16.0",
+    "fastapi>=0.149.0",
+    "pydantic-settings>=2.16.0",
+    "redis>=8.1.0",
+    "sqlalchemy[asyncio]>=2.1.5",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["src", "tests", "migrations"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "RUF", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests", "migrations"]
+mypy_path = "src"
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: needs running Postgres and Redis (see docker-compose.yml)"]
+# ddtrace auto-registers a pytest plugin that starts a tracer and tries to reach
+# a Datadog agent on exit. Tests need no agent, so disable it (APM is enabled in
+# the cluster via ddtrace-run, not under pytest).
+addopts = "-p no:ddtrace"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.0",
+    "poethepoet>=0.49.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.1",
+]
+
+# Task runner. These are the documented entry points for the repository
+# (SPEC.md section 12); they wrap the real tools so local runs match CI.
+# Run with `uv run poe <task>`; `uv run poe` with no task lists them.
+# poe runs inside the uv environment, so ruff/mypy/pytest/alembic/pre-commit
+# are on PATH without a `uv run` prefix.
+[tool.poe.tasks.install]
+help = "Install all Python dependencies (dev groups included)"
+cmd = "uv sync --all-groups"
+
+[tool.poe.tasks.run]
+help = "Run the API locally with auto-reload"
+cmd = "uvicorn app.main:create_app --factory --reload"
+
+[tool.poe.tasks.up]
+help = "Start local Postgres 17 and Redis 7 via Docker Compose"
+cmd = "docker compose up -d --wait"
+
+[tool.poe.tasks.down]
+help = "Stop local Postgres and Redis"
+cmd = "docker compose down"
+
+[tool.poe.tasks.lint]
+help = "Ruff lint and format check"
+sequence = [
+    { cmd = "ruff check ." },
+    { cmd = "ruff format --check ." },
+]
+
+[tool.poe.tasks.format]
+help = "Auto-format and auto-fix with Ruff"
+sequence = [
+    { cmd = "ruff format ." },
+    { cmd = "ruff check --fix ." },
+]
+
+[tool.poe.tasks.typecheck]
+help = "mypy --strict (configured above)"
+cmd = "mypy"
+
+[tool.poe.tasks.test]
+help = "Run pytest (integration tests need 'poe up')"
+cmd = "pytest"
+
+[tool.poe.tasks.audit]
+help = "pip-audit against the exact locked versions (SPEC 6.1)"
+shell = """
+set -eu
+trap 'rm -f requirements.audit.txt' EXIT
+uv export --frozen --no-emit-project --no-hashes --format requirements-txt > requirements.audit.txt
+uvx pip-audit==2.10.1 --requirement requirements.audit.txt --strict --vulnerability-service osv
+"""
+
+[tool.poe.tasks.security]
+help = "gitleaks (working tree), Ruff S rules, and SOPS plaintext guard"
+sequence = [
+    { cmd = "gitleaks dir --redact --verbose ." },
+    { cmd = "ruff check --select S ." },
+    { cmd = "python scripts/check_sops_encrypted.py" },
+]
+
+[tool.poe.tasks.k8s-check]
+help = "Render dev/prod/argocd, then kubeconform (two passes) and kube-linter"
+# The -schema-location template intentionally OMITS the API group: a vendored
+# CRD schema is resolved by kind+version only (ExternalSecret_v1.json, etc.).
+# Safe because each CRD kind here is unique across groups; a future CRD sharing
+# a kind would need the group re-added. The template uses {{.ResourceKind}}
+# verbatim (canonical kind casing) — the pinned kubeconform 0.8.0 provides no
+# toLower/lower template function, so the vendored files match that exact
+# casing. See deploy/k8s/crd-schemas/README.md.
+shell = """
+set -eu
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+# Workload overlays: validated by BOTH kubeconform and kube-linter.
+for env in dev prod; do
+  kubectl kustomize deploy/k8s/overlays/$env > "$tmp/$env.yaml"
+done
+# Cluster-scoped Argo CD Applications + ClusterSecretStore: kubeconform ONLY
+# (kube-linter's workload checks are meaningless for Application/Store CRs).
+kubectl kustomize deploy/argocd > "$tmp/argocd.yaml"
+
+# PASS (a) — lenient. -ignore-missing-schemas is the backstop for ANY other CRD
+# a consumer may add; core + the three vendored CRD schemas resolve here too.
+kubeconform -strict -summary -ignore-missing-schemas \
+  -schema-location default \
+  -schema-location 'deploy/k8s/crd-schemas/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json' \
+  "$tmp/dev.yaml" "$tmp/prod.yaml" "$tmp/argocd.yaml"
+
+# PASS (b) — the DURABLE "resolves, not skips" gate. Scoped to the CRD-bearing
+# renders, -ignore-missing-schemas REMOVED and -schema-location pointing ONLY at
+# the vendored CRD directory. Core kinds are excluded via -skip (validated by
+# pass (a)), so the only kinds pass (b) must resolve are the three vendored CRDs
+# (Application, ExternalSecret, ClusterSecretStore). A missing/mis-named/
+# version-drifted schema fails the build every run.
+kubeconform -strict -summary \
+  -schema-location 'deploy/k8s/crd-schemas/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json' \
+  -skip 'Namespace,ServiceAccount,ConfigMap,Secret,Service,Deployment,Job,CronJob,NetworkPolicy,PodDisruptionBudget,HorizontalPodAutoscaler' \
+  "$tmp/argocd.yaml" "$tmp/dev.yaml" "$tmp/prod.yaml"
+
+kube-linter lint "$tmp/dev.yaml" "$tmp/prod.yaml"
+"""
+
+[tool.poe.tasks.docs]
+help = "Serve the documentation locally with live reload"
+cmd = "uvx --from mkdocs==1.6.1 --with mkdocs-material==9.7.7 mkdocs serve -f mkdocs.yml"
+
+[tool.poe.tasks.docs-build]
+help = "Build the documentation strictly (same check as CI)"
+cmd = "uvx --from mkdocs==1.6.1 --with mkdocs-material==9.7.7 mkdocs build --strict -f mkdocs.yml"
+
+[tool.poe.tasks.db-upgrade]
+help = "Apply all Alembic migrations to DATABASE_URL"
+cmd = "alembic upgrade head"
+
+[tool.poe.tasks.migration]
+help = "Autogenerate a migration: poe migration 'add widgets table'"
+# shell task (not cmd) so the message survives as a single quoted argument;
+# cmd-style ${message} interpolation would split it on spaces.
+shell = 'alembic revision --autogenerate -m "$message"'
+args = [{ name = "message", positional = true, help = "describe the change" }]
+
+[tool.poe.tasks.changelog]
+help = "Regenerate CHANGELOG.md with git-cliff"
+cmd = "git cliff -o CHANGELOG.md"
+
+[tool.poe.tasks.hooks]
+help = "Install pre-commit hooks and the commit-msg hook"
+sequence = [
+    { cmd = "pre-commit install --install-hooks" },
+    { cmd = "pre-commit install --hook-type commit-msg" },
+]
+
+[tool.poe.tasks.check]
+help = "Run lint, typecheck, and test (the pre-PR loop)"
+sequence = ["lint", "typecheck", "test"]
+
+[tool.poe.tasks.check-all]
+help = "Full local gate: lint, typecheck, audit, security, test, k8s-check, docs-build"
+sequence = ["lint", "typecheck", "audit", "security", "test", "k8s-check", "docs-build"]

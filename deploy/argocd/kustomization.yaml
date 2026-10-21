@@ -1,0 +1,13 @@
+# Cluster-scoped, register-once-per-cluster resources: the Argo CD Application
+# CRs (dev + prod) and the ESO ClusterSecretStore.
+#
+# Intentionally NO `namespace:` field. These resources are cluster-scoped
+# (ClusterSecretStore) or set their own namespace explicitly (the Applications
+# target the Argo CD namespace), so a namespace transformer here would be wrong.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - application-dev.yaml
+  - application-prod.yaml
+  - clustersecretstore.yaml

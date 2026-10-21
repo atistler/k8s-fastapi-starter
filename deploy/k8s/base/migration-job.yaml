@@ -1,0 +1,82 @@
+# Runs `alembic upgrade head` before each rollout (SPEC.md section 7).
+#
+# This is an Argo CD PreSync hook: Argo CD runs it to completion BEFORE the main
+# sync (the Deployment), enforcing "migrate before the new pods roll out"
+# declaratively. `hook-delete-policy: BeforeHookCreation` deletes the previous
+# hook Job before creating the next, so each sync gets a fresh Job — the
+# immutable-pod-template collision that the old CD flow sidestepped by appending
+# the commit SHA to the name no longer applies, and that SHA-append dance is
+# gone. `sync-wave: "-1"` keeps the hook ordered ahead of wave-0 resources.
+# Overlays still rename the Job per environment (app-migrate-dev /
+# app-migrate-prod) for identity; ttlSecondsAfterFinished reaps finished Jobs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: app-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: k8s-fastapi-starter
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-fastapi-starter
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          # Same image as the API. Placeholder tag; overlays set the real one.
+          image: ghcr.io/PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter:0.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            # The migration Job is short-lived and needs no APM. Disable tracing
+            # here (explicit env overrides the DD_TRACE_ENABLED=true that comes
+            # from app-config via envFrom) to avoid noise. See docs/monitoring.md.
+            - name: DD_TRACE_ENABLED
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

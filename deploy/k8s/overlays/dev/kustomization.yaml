@@ -1,0 +1,62 @@
+# Overlay: dev
+#
+# The `app-secrets` Secret is materialized by the External Secrets Operator from
+# externalsecret.yaml below (which points at AWS Secrets Manager) — kustomize no
+# longer touches any secret material. Rotation is: edit the SOPS file, commit;
+# CI (sync-secrets) decrypts it to AWS Secrets Manager; ESO syncs it into the
+# cluster as the `app-secrets` Secret that deployment.yaml/migration-job.yaml
+# consume by name.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fastapi-starter-dev
+
+resources:
+  - ../../base
+  - externalsecret.yaml
+
+images:
+  - name: ghcr.io/PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter
+    # Placeholder. CD sets the commit-SHA tag with `kustomize edit set image`.
+    newTag: "0.0.0-dev"
+
+replicas:
+  - name: app
+    count: 1
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: app-config
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: app-config
+      data:
+        APP_ENV: "dev"
+        LOG_LEVEL: "DEBUG"
+  # Datadog unified service tagging: set env=dev on the pod template label.
+  # DD_ENV reads this label via fieldRef (see base/deployment.yaml).
+  - target:
+      kind: Deployment
+      name: app
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: app
+      spec:
+        template:
+          metadata:
+            labels:
+              tags.datadoghq.com/env: "dev"
+  # Per-environment Job name so dev and prod migrations do not share a name.
+  # CD appends the image tag at render time (see migration-job.yaml).
+  - target:
+      kind: Job
+      name: app-migrate
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: app-migrate-dev

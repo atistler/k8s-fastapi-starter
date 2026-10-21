@@ -1,0 +1,29 @@
+# Argo CD Application: dev
+#
+# Registers the dev overlay with Argo CD. A consumer applies this (and the prod
+# Application + the ClusterSecretStore) once per cluster, into whichever
+# namespace their Argo CD runs in. `metadata.namespace: argocd` is the
+# conventional Argo CD install namespace — change it if your install differs.
+# `spec.project: default` is likewise replaceable with your Argo CD project.
+#
+# Dev auto-syncs (prune + selfHeal); prod does not (see application-prod.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-fastapi-starter-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter.git
+    path: deploy/k8s/overlays/dev
+    targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fastapi-starter-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
