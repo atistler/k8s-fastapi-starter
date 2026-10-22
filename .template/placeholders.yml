@@ -149,22 +149,47 @@ rename:
     replace_in:
       - pyproject.toml                       # [project].name
       - catalog-info.yml                     # metadata.name + project-slug/image repo
-      - deploy/k8s/**                        # app.kubernetes.io/name labels + selectors + image repo + DD service + ExternalSecret extract.key
-      - deploy/argocd/**                     # Application source.path/repoURL + ClusterSecretStore
+      - deploy/k8s/**                        # app.kubernetes.io/name labels + selectors + image repo + DD service label + ExternalSecret extract.key + NetworkPolicy/PDB selectors + backup pod label (see NOTE on label coupling)
+      - deploy/argocd/**                     # Argo CD Application names (…-dev/…-prod) + source.repoURL
       - .github/workflows/sync-secrets.yml   # Secrets Manager secret id k8s-fastapi-starter/<env>/app-secrets
       - src/app/main.py                      # FastAPI title
-      - src/app/config.py                    # dd_service default
       - src/app/__init__.py                  # package docstring
-      - docs/monitoring.md                   # DD_SERVICE examples
-      - tests/unit/test_datadog.py           # dd_service assertion
-      - tests/unit/test_logging.py           # dd.service sample value
+      - .env.example                         # DD_SERVICE default
+      - docs/monitoring.md                   # DD_SERVICE examples + tags.datadoghq.com/service
+      - docs/deployment.md                   # Secrets Manager secret id + app.kubernetes.io/name references
+      - docs/secrets.md                      # Secrets Manager secret id
+      - tests/unit/test_logging.py           # dd.service sample value asserted in the log payload
+    # NOTE (NetworkPolicy label coupling — rename these as a SET):
+    #   deploy/k8s/base/networkpolicy.yaml selects pods by
+    #   `app.kubernetes.io/name: k8s-fastapi-starter`. The application pods
+    #   (deployment.yaml / migration-job.yaml) AND the backup CronJob pod
+    #   (deploy/k8s/base/backup-cronjob.yaml, pod-template label) BOTH carry
+    #   that same label so the policy admits their egress. The NetworkPolicy's
+    #   own podSelector/matchLabels must change together with them. Renaming the
+    #   slug MUST update every `app.kubernetes.io/name` occurrence under
+    #   deploy/k8s/** in one pass — rename one without the others and the backup
+    #   pod (or app pods) silently lose egress. The `deploy/k8s/**` glob covers
+    #   all of them; just do not rename them piecemeal.
+    # NOTE: uv.lock also contains the slug ([[package]] name), but it is
+    #   GENERATED from pyproject.toml [project].name. Do not hand-edit it; run
+    #   `uv lock` after renaming pyproject.toml so it regenerates (AGENTS.md:
+    #   never hand-edit uv.lock).
     keep_as_is:
       # These describe the TEMPLATE itself, not the new service. Do not rename.
       - SPEC.md
       - README.md
       - AGENTS.md
-      - .template/**
+      - CLAUDE.md
       - CHANGELOG.md
+      - .template/**
+      # Agent tooling that describes the template's own dev workflow. The slug
+      # appears only in prose/skill descriptions ("this k8s-fastapi-starter
+      # service"); nothing load-bearing depends on it, so leave it as the
+      # template default (mirrors CLAUDE.md / AGENTS.md). A downstream project
+      # may rename these by hand if it wants, but init must not.
+      - .claude/**
+      # Task scratch/journal artifacts, not shipped service identity.
+      - .agents/**
 
   - id: PROJECT_TITLE
     description: Human-readable display name (Backstage title).
