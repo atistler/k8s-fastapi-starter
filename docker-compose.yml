@@ -1,0 +1,55 @@
+# LOCAL DEVELOPMENT ONLY.
+# The credentials below are placeholders for a developer laptop. Do not reuse
+# them anywhere shared, and never deploy this file to a cluster.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: local-only-password # LOCAL DEV ONLY placeholder
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    # Password is passed on the command line so the server requires auth,
+    # matching the REDIS_URL form in .env.example.
+    image: redis:7
+    command: ["redis-server", "--requirepass", "local-only-password"] # LOCAL DEV ONLY placeholder
+    ports:
+      - "6379:6379"
+    environment:
+      REDISCLI_AUTH: local-only-password # LOCAL DEV ONLY placeholder
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Datadog APM is OFF for local development: the app reads DD_TRACE_ENABLED,
+  # which defaults to false, so no Datadog agent or API key is needed to run
+  # locally (postgres + redis above are all that `uv run poe up` requires).
+  #
+  # To experiment with local APM, export DD_API_KEY (never commit it) and
+  # uncomment the agent below, then run the app with DD_TRACE_ENABLED=true and
+  # DD_AGENT_HOST=datadog-agent.
+  #
+  # datadog-agent:
+  #   image: gcr.io/datadoghq/agent:7
+  #   environment:
+  #     DD_API_KEY: ${DD_API_KEY:?set DD_API_KEY in your shell, do not commit it}
+  #     DD_SITE: datadoghq.com
+  #     DD_APM_ENABLED: "true"
+  #     DD_APM_NON_LOCAL_TRAFFIC: "true"
+  #   ports:
+  #     - "8126:8126" # trace intake (DD_TRACE_AGENT_PORT)
+
+volumes:
+  postgres-data:

@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: k8s-fastapi-starter
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-fastapi-starter
+      app.kubernetes.io/component: api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-fastapi-starter
+        app.kubernetes.io/component: api
+        # Datadog unified service tagging. These pod labels are the source for
+        # DD_ENV/DD_SERVICE/DD_VERSION (read back via fieldRef below). Overlays
+        # patch `env` (dev/prod); CD patches `version` from the image tag.
+        tags.datadoghq.com/env: "local"
+        tags.datadoghq.com/service: k8s-fastapi-starter
+        tags.datadoghq.com/version: "0.0.0"
+        # Standard recommended label; kept in sync with the unified-tag version.
+        app.kubernetes.io/version: "0.0.0"
+      annotations:
+        # Optional, cluster-dependent: lets the Datadog Admission Controller
+        # mutate the pod (inject the agent host, standard env, and libraries).
+        # Harmless if the controller is not installed. See docs/monitoring.md.
+        admission.datadoghq.com/enabled: "true"
+    spec:
+      serviceAccountName: app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          # Placeholder. Overlays set the real tag; PLACEHOLDER_GITHUB_ORG is the GitHub org.
+          image: ghcr.io/PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter:0.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            # Non-secret config, including the DD_* flags/port (see configmap.yaml).
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            # Datadog unified service tagging, sourced from the pod labels above.
+            - name: DD_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_SERVICE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
+            # Reach the node-local Datadog Agent (DaemonSet) via the host IP.
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              # ddtrace-run + SQLAlchemy/asyncpg/redis need headroom; 128Mi OOMs.
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # startupProbe gives a slow first boot (DB engine + Redis created in the
+          # lifespan before uvicorn serves) up to 60s without the liveness probe
+          # killing the pod; liveness/readiness take over once it passes.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          volumeMounts:
+            # The root filesystem is read-only; give the process a writable /tmp.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

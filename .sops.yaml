@@ -1,0 +1,19 @@
+# PLACEHOLDER CONFIGURATION. The KMS ARN below is a placeholder, not a real key.
+# Replace PLACEHOLDER_AWS_REGION, PLACEHOLDER_AWS_ACCOUNT_ID and PLACEHOLDER_KMS_KEY_ID
+# (or use the team's alias ARN) before encrypting any real secret.
+# Mirrors RSS-Engineering/vmware-operations (SPEC.md section 9).
+#
+# creation rules are evaluated sequentially, the first match wins
+creation_rules:
+  - path_regex: secrets\.dev\.yaml$
+    unencrypted_regex: '^(username|description)$'
+    key_groups:
+      - kms:
+          # PLACEHOLDER ARN: arn:aws:kms:PLACEHOLDER_AWS_REGION:PLACEHOLDER_AWS_ACCOUNT_ID:key/PLACEHOLDER_KMS_KEY_ID
+          - arn: arn:aws:kms:PLACEHOLDER_AWS_REGION:PLACEHOLDER_AWS_ACCOUNT_ID:key/PLACEHOLDER_KMS_KEY_ID
+  - path_regex: secrets\.prod\.yaml$
+    unencrypted_regex: '^(username|description)$'
+    key_groups:
+      - kms:
+          # PLACEHOLDER ARN: arn:aws:kms:PLACEHOLDER_AWS_REGION:PLACEHOLDER_AWS_ACCOUNT_ID:key/PLACEHOLDER_KMS_KEY_ID
+          - arn: arn:aws:kms:PLACEHOLDER_AWS_REGION:PLACEHOLDER_AWS_ACCOUNT_ID:key/PLACEHOLDER_KMS_KEY_ID

@@ -1,0 +1,20 @@
+# Non-secret runtime configuration. Overlays patch APP_ENV and LOG_LEVEL.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app.kubernetes.io/name: k8s-fastapi-starter
+data:
+  APP_ENV: "local"
+  LOG_LEVEL: "INFO"
+  # Datadog APM / tracing (non-secret). DD_SERVICE/DD_ENV/DD_VERSION and
+  # DD_AGENT_HOST are NOT here: they come from pod labels and the node host IP
+  # via fieldRef in deployment.yaml. See docs/monitoring.md and SPEC.md.
+  # DD_TRACE_ENABLED is true for the API; the migration Job overrides it to
+  # "false" with an explicit container env (env wins over envFrom).
+  DD_TRACE_AGENT_PORT: "8126"
+  DD_TRACE_ENABLED: "true"
+  DD_LOGS_INJECTION: "true"
+  DD_RUNTIME_METRICS_ENABLED: "true"
+  DD_PROFILING_ENABLED: "false"

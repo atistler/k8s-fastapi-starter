@@ -1,0 +1,19 @@
+---
+# Backstage Component. Field layout follows RSS-Engineering/cloud-environments (backstage/component-*.yaml).
+# Replace the PLACEHOLDER values before registering this repo in Backstage.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: k8s-fastapi-starter
+  title: K8s FastAPI starter
+  namespace: default
+  description: |
+    Template for a Kubernetes-deployed FastAPI service backed by PostgreSQL and Redis.
+  annotations:
+    github.com/project-slug: PLACEHOLDER_GITHUB_ORG/k8s-fastapi-starter # PLACEHOLDER: GitHub org/repo
+    backstage.io/techdocs-ref: dir:. # TechDocs builds mkdocs.yml from the repo root
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/PLACEHOLDER_OWNER_TEAM # PLACEHOLDER: owning group (SPEC section 13, item 6)
+  system: PLACEHOLDER_BACKSTAGE_SYSTEM # PLACEHOLDER: Backstage System this belongs to

@@ -1,0 +1,50 @@
+site_name: K8s FastAPI starter
+site_description: Template for a Kubernetes-deployed FastAPI service backed by PostgreSQL and Redis
+docs_dir: docs
+site_dir: site
+
+# Built from the repo root by TechDocs in Backstage (catalog-info.yml) and by `uv run poe docs-build` in CI.
+# Keep YAML plain (no !!python tags) so pre-commit check-yaml passes.
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Architecture: architecture.md
+  - Configuration: configuration.md
+  - Database migrations: database-migrations.md
+  - Deployment: deployment.md
+  - Monitoring: monitoring.md
+  - Secrets: secrets.md
+  - Security: security.md
+  - Releasing: releasing.md
+  - Decisions:
+      - ADR 0001 - Technology choices: adr/0001-technology-choices.md
+      - ADR 0002 - Task runner (poe): adr/0002-task-runner-poe.md
