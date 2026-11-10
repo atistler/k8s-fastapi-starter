@@ -141,10 +141,10 @@ Other common targets: `uv run poe install`, `uv run poe run`, `uv run poe up` / 
 - Cut releases per `SPEC.md` §8/§10 and the **release** skill: bump the
   changelog with git-cliff, commit `chore(release): vX.Y.Z`, tag and push.
 
-## Rackspace data handling
+## Data handling
 
 - Do not upload repo or customer data to external AI or third-party services
-  that are not on the Rackspace approved list (`SPEC.md` §14.13). Treat all repo
+  that are not on your organization's approved list (`SPEC.md` §14.13). Treat all repo
   content as potentially sensitive; use placeholders in examples.
 
 ## Project skills

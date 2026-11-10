@@ -1,5 +1,5 @@
 ---
-# Backstage Component. Field layout follows RSS-Engineering/cloud-environments (backstage/component-*.yaml).
+# Backstage Component. Field layout follows common internal service-catalog conventions.
 # Replace the PLACEHOLDER values before registering this repo in Backstage.
 apiVersion: backstage.io/v1alpha1
 kind: Component
