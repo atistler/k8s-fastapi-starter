@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-003",
+  "type": "refactor",
+  "description": "Backup reconciliation (design commit 3, `refactor(k8s)`): remove the pg_dump CronJob + its ServiceAccount, wire per-env Barman destinationPath patches in the overlays, rework the NetworkPolicy egress (add Sentinel 26379, remove 443 and all three backup-pod clauses), reconcile the two stale .kube-linter.yaml exclusions that cite the deleted CronJob, and update the bootstrap_backups.py docstring. Depends on FEAT-002 (the CNPG Cluster/Barman config the overlays patch and the new resources list must already exist). This FEAT makes `uv run poe k8s-check` green end-to-end (the overlay CronJob-patch dangling-reference from FEAT-002 is resolved here).",
+  "status": "pending",
+  "steps": [
+    "Delete deploy/k8s/base/backup-cronjob.yaml and deploy/k8s/base/backup-serviceaccount.yaml.",
+    "deploy/k8s/base/kustomization.yaml: remove `backup-serviceaccount.yaml` and `backup-cronjob.yaml` from resources: (the three CNPG/Redis CRs were added in FEAT-002).",
+    "deploy/k8s/overlays/dev/kustomization.yaml: remove the `db-backup` CronJob `BACKUP_PREFIX` patch; ADD a MANDATORY patch targeting the CNPG `Cluster` (kind Cluster, name pg) that sets spec.backup.barmanObjectStore.destinationPath (and/or serverName) to the dev prefix (e.g. s3://PLACEHOLDER_BACKUP_BUCKET/dev or serverName dev) so dev/prod WAL+base backups never collide.",
+    "deploy/k8s/overlays/prod/kustomization.yaml: same swap -> prod prefix (distinct from dev). Optionally patch CNPG/Redis resources upward (not required).",
+    "deploy/k8s/base/networkpolicy.yaml: in egress rule 2 keep 5432/TCP + 6379/TCP, ADD 26379/TCP (Sentinel), keep 8126/TCP + 8125/UDP; REMOVE the 443/TCP port entry. Remove ALL THREE backup-pod references: (1) the top-of-file egress description listing 443 for S3/STS/KMS/Secrets Manager, (2) the inline comment on the 443 port entry, (3) the TIGHTEN-example clause about preserving the backup CronJob pod's egress. Rewrite the header comment to say egress targets in-cluster CNPG + Redis Sentinel Services (5432/6379/26379) + DNS + Datadog, and rewrite the commented tighten-example to reference the CNPG (pg-rw/pg-ro/pg-r) and Redis (rfs-redis/rfr-redis) Service labels instead of a generic postgres podSelector; add a note that CNPG's own backup egress is the operator's concern (CNPG pods are not selected by this policy).",
+    "deploy/k8s/.kube-linter.yaml: run kube-linter on the CronJob-deleted dev/prod renders and reconcile the two exclusions whose reasons cite the deleted backup-cronjob.yaml — REMOVE `latest-tag` if it no longer fires (untagged PLACEHOLDER_BACKUP_IMAGE is gone; remaining images are tagged :0.0.0), and REWRITE the `job-ttl-seconds-after-finished` reason to cite the migration Job (migration-job.yaml still sets ttlSecondsAfterFinished: 3600) or remove it if it no longer fires. Any kept/added exclusion needs a written reason on the same line (SPEC §14.9).",
+    "scripts/bootstrap_backups.py: update the DOCSTRING only — object layout is now Barman (`<prefix>/base`, `<prefix>/wals`), not `db/<ts>.sql.gz`; retention stays 30d; the bucket default SSE-KMS CMK still encrypts every object. No code/behavior change (its tests assert plan text + the placeholder guard and must stay green)."
+  ],
+  "acceptance_criteria": [
+    "`uv run poe k8s-check` passes end-to-end: dev/prod/argocd render, both kubeconform passes resolve the four CNPG/Redis schemas (pass (b) has no -ignore-missing-schemas), and kube-linter is clean on dev/prod.",
+    "No CronJob and no `backup` ServiceAccount are rendered in dev/prod; dev and prod each render a distinct Barman destinationPath/serverName prefix.",
+    "networkpolicy.yaml egress permits 5432/6379/26379/8126(TCP)+8125(UDP), no longer opens 443, and contains zero backup-pod references.",
+    ".kube-linter.yaml contains no exclusion whose written reason references the deleted backup-cronjob.yaml.",
+    "`uv run poe check` still passes (bootstrap_backups tests unaffected by the docstring edit)."
+  ],
+  "verification": [
+    "uv run poe k8s-check",
+    "uv run poe check"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

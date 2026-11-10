@@ -29,8 +29,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        engine = create_engine(resolved.database_url)
-        redis = create_redis(resolved.redis_url)
+        engine = create_engine(resolved.database_dsn)
+        redis = create_redis(resolved)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.redis = redis

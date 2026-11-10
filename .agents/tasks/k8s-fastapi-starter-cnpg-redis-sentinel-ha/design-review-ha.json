@@ -1,0 +1,38 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "title": "pyproject.toml k8s-check pass-(a) and pass-(b) comments left factually wrong (\"the three vendored CRDs\")",
+      "where": "pyproject.toml [tool.poe.tasks.k8s-check]; design-ha.md §4 two-pass gate + §5 Modify table (pyproject.toml row)",
+      "problem": "The design's pyproject.toml Modify row only says to add a comment that CNPG+Redis CRDs are pass-(b)-resolved and to drop the CronJob -skip entry. It does not correct the existing comments that hardcode 'the three vendored CRD schemas' (pass a) and 'the only kinds pass (b) must resolve are the three vendored CRDs (Application, ExternalSecret, ClusterSecretStore)' (pass b). After this batch there are seven vendored schemas and six rendered CRD kinds, so both comments become false. This is the same stale-reference class the design fixes for the NetworkPolicy comments (finding 8), .kube-linter.yaml reasons (finding 2), and placeholders.yml NOTE (finding 7); leaving it is inconsistent.",
+      "fix": "Require rewriting BOTH comments. Pass (b): 'the kinds pass (b) must resolve are the vendored CRDs rendered by the overlays/argocd: Application, ExternalSecret, ClusterSecretStore, Cluster, ScheduledBackup, RedisFailover (Backup_v1.json is vendored for ad-hoc restores but is not rendered).' Make the pass (a) phrase count-free ('the vendored CRD schemas') so it cannot go stale again."
+    },
+    {
+      "id": 2,
+      "severity": "MEDIUM",
+      "title": "Dropping CronJob from the pass-(b) -skip list is specified as two contradictory instructions",
+      "where": "pyproject.toml [tool.poe.tasks.k8s-check] -skip list; design-ha.md §4 (round-3 finding 3 response) + §5 Modify table (pyproject.toml row)",
+      "problem": "The design says 'Chosen: drop CronJob from the -skip list' and in the same paragraph 'If an implementer prefers to retain it defensively ... either is acceptable.' A design meant to remove ambiguity before coding offers two different concrete edits for the same line. (The underlying 'no CronJob is rendered' claim is correct, since the new operator CRs render no CronJob, but it is stated without that one-line justification and still needs a pass-(b) re-run to confirm.)",
+      "fix": "Make it a single instruction: 'Remove CronJob from the pass-(b) -skip list; the backup CronJob was the only rendered CronJob and it is deleted this batch. Do not add it back.' Drop the 'either is acceptable' alternative (or invert to 'keep CronJob' and drop the 'chosen: drop it' sentence). One decision, not two."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "Backup_v1.json is vendored-but-never-rendered; README should say so",
+      "where": "deploy/k8s/crd-schemas/Backup_v1.json (Create table) + crd-schemas/README.md (Modify row); design-ha.md §4",
+      "problem": "Backup_v1.json is a hard Create deliverable but no overlay renders a Backup CR, so only Cluster/ScheduledBackup/RedisFailover are actually gated by pass (b). This is internally consistent but a later reader could mistake the absent Backup manifest for a bug.",
+      "fix": "In the crd-schemas/README.md Modify row, require a provenance note stating Backup_v1.json is vendored for ad-hoc restore use and is NOT rendered by any overlay (so it is not exercised by the k8s-check pass-(b) gate)."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "title": "migrations/env.py module docstring not updated alongside the get_url() change",
+      "where": "migrations/env.py module docstring ('URL from app.config.Settings'); design-ha.md §F / Modify table (migrations/env.py row)",
+      "problem": "The design changes get_url() to return Settings().database_dsn but does not mention the module's one-line docstring, which says 'URL from app.config.Settings'. It stays broadly true but no longer names the composed-DSN behavior (DATABASE_URL locally, discrete PG_* in-cluster).",
+      "fix": "When editing get_url(), update the module docstring to name database_dsn as the source (DATABASE_URL locally / discrete PG_* in-cluster), mirroring the §F and main.py wording."
+    }
+  ],
+  "reviewDoc": "/Users/adamtistler/PycharmProjects/k8s-fastapi-starter/.agents/tasks/k8s-fastapi-starter-cnpg-redis-sentinel-ha/design-review-ha.md"
+}

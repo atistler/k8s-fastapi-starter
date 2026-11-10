@@ -15,6 +15,9 @@ data:
   # "false" with an explicit container env (env wins over envFrom).
   DD_TRACE_AGENT_PORT: "8126"
   DD_TRACE_ENABLED: "true"
-  DD_LOGS_INJECTION: "true"
+  # Log-trace injection is disabled: logs are not shipped to Datadog, so the
+  # dd.trace_id/dd.span_id correlation fields are not needed. APM traces and
+  # runtime metrics are unaffected.
+  DD_LOGS_INJECTION: "false"
   DD_RUNTIME_METRICS_ENABLED: "true"
   DD_PROFILING_ENABLED: "false"

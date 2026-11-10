@@ -2,6 +2,10 @@
 
 Requires DATABASE_URL and REDIS_URL (see .env.example) and a migrated database
 (`uv run poe db-upgrade`).
+
+Integration runs against plain Redis (Docker Compose), i.e. the ``REDIS_URL``
+path of ``create_redis``. The Sentinel construction path is covered by the
+mocked unit test in ``tests/unit/test_cache.py``.
 """
 
 from collections.abc import AsyncIterator

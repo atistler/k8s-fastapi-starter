@@ -1,0 +1,7 @@
+{
+  "task_id": "task-cnpg-redis-sentinel-ha",
+  "task_description": "Adopt in-cluster HA Postgres (CloudNativePG 3-instance Cluster, quorum sync, Barman ScheduledBackup) and Redis Sentinel (Spotahome RedisFailover, 3 sentinels / 1 master + 2 replicas) as the deployment target, reversing the SPEC managed-DB/cache non-goal. App code switches Redis/DB client construction between plain-URL local dev and Sentinel+CNPG-sourced cluster mode; the pg_dump CronJob is replaced by CNPG-native backups; secrets/ESO, placeholders, SPEC/ADR, and docs are reconciled. Local Docker Compose stays plain Postgres 17 + Redis 7, unchanged. Work on branch main in the repo ROOT (no worktree). Approved design: .agents/tasks/k8s-fastapi-starter-cnpg-redis-sentinel-ha/design-ha.md.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005"],
+  "blocked_reason": null
+}

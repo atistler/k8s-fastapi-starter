@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-005",
+  "type": "docs",
+  "description": "SPEC reversal + ADR-in-place + docs (design commit 6, `docs`): edit docs/adr/0001-technology-choices.md in place (dated reversal note, NO new ADR), apply the SPEC.md §1/§2/§3/§5+§5.1/§7/§9/§10/§13 edits, and rewrite docs/deployment.md, docs/architecture.md, docs/secrets.md, docs/configuration.md for the CNPG + Redis Sentinel flow. Depends on all prior FEATs (docs must describe the shipped manifests/secrets/config). mkdocs build --strict must stay clean (watch for broken internal links and the nav).",
+  "status": "pending",
+  "steps": [
+    "docs/adr/0001-technology-choices.md: append a dated reversal note (no new ADR) — the managed-DB/cache non-goal is reversed: in-cluster HA adopted via CloudNativePG (3-instance Cluster, quorum sync, CNPG-native Barman backups) and Redis Sentinel (RedisFailover, 3 sentinels / 1 master + 2 replicas); local dev stays Docker Compose; updated in place per the amended policy. Add CNPG + Redis Sentinel to the Decision summary bullet about SQLAlchemy/Redis.",
+    "SPEC.md §1/§2: flip the non-goal 'A specific cloud provider's managed database or cache... reached by URL from config' to 'in-cluster CNPG Cluster + Redis Sentinel are the adopted deployment target; local development uses Docker Compose (plain Postgres 17 + plain Redis 7)'. Add CNPG and the Redis operator to the §2 table (both 'assumed pre-installed, cluster-level, like the Datadog Agent').",
+    "SPEC.md §3: add CNPG Cluster, CNPG ScheduledBackup, the RedisFailover CR, and the four vendored CRD schemas (Cluster_v1.json, ScheduledBackup_v1.json, Backup_v1.json, RedisFailover_v1.json) to the tree/infra listing; remove backup-cronjob.yaml and backup-serviceaccount.yaml; change the daily pg_dump CronJob line to 'CNPG-native scheduled Barman backups to the same S3 bucket/CMK'.",
+    "SPEC.md §5 config table: replace the single REDIS_URL row with the Sentinel shape (REDIS_SENTINEL_HOSTS, REDIS_MASTER_NAME, REDIS_PASSWORD for cluster; REDIS_URL kept as local-dev fallback) and show the two Postgres modes (DATABASE_URL local vs discrete PG_HOST/PG_PORT/PG_USER/PG_PASSWORD/PG_DBNAME projected from CNPG pg-app, composed into database_dsn; note the query-string-free asyncpg requirement).",
+    "SPEC.md §5.1: rewrite the stale clause 'DATABASE_URL/REDIS_URL stay in the SOPS Secret unchanged' to 'the Redis password lives in the SOPS Secret as REDIS_PASSWORD (materialized by ESO), and the Postgres credential is supplied by CNPG's generated pg-app Secret — not SOPS', keeping the 'DD config is non-secret' point intact.",
+    "SPEC.md §7: migrations run via the Argo CD PreSync Job against the CNPG primary (pg-rw); add the one-time first-boot ordering caveat (migration Job may retry until the CNPG primary is ready); update the 'migrations/env.py reads DATABASE_URL from app.config.Settings' line to read the composed database_dsn.",
+    "SPEC.md §9: document the reconciled secret flow — REDIS_PASSWORD flows SOPS->Secrets-Manager->ESO as one stored property, materialized into two app-secrets keys (REDIS_PASSWORD for the app, password for the operator); the DB credential is no longer a SOPS/Secrets-Manager key (CNPG pg-app).",
+    "SPEC.md §10: CNPG ScheduledBackup (Barman->S3) replaces the pg_dump CronJob in the CI/CD narrative; bootstrap_backups.py still provisions the bucket + CMK.",
+    "SPEC.md §13: mark the managed-DB/cache question Decided -> ADR 0001 (add a short 'Decided' line mirroring the Q9 observability entry, pointing at ADR 0001 and §2).",
+    "docs/deployment.md: CNPG + Redis operators assumed pre-installed (CNPG 1.24+ floor); CNPG Barman backups replace the pg_dump CronJob; add the first-boot ordering rough edge (migration Job retries until the CNPG primary is ready) next to the existing ESO first-sync note.",
+    "docs/architecture.md: update the Kubernetes shape — CNPG Cluster (3 instances) + Redis Sentinel replace the external DB/cache URL endpoints; local dev stays Docker Compose.",
+    "docs/secrets.md: app-secrets key set is now {REDIS_PASSWORD}; DATABASE_URL comes from CNPG's generated pg-app Secret, not SOPS.",
+    "docs/configuration.md: config table gains the Redis Sentinel vars and the DATABASE_URL-vs-discrete-PG_* source distinction (CNPG); add the slug-bearing Secrets Manager id example `<slug>/<env>/app-secrets` (now covered by PROJECT_SLUG.replace_in via FEAT-004)."
+  ],
+  "acceptance_criteria": [
+    "`uv run poe docs-build` (mkdocs build --strict) passes with no warnings/errors (no broken internal links).",
+    "docs/adr/0001-technology-choices.md carries a dated in-place reversal note and no new ADR file was created.",
+    "SPEC.md §1/§2/§3/§5/§5.1/§7/§9/§10/§13 reflect the in-cluster CNPG + Redis Sentinel flow and contain no remaining 'managed DB/cache reached by URL' non-goal wording.",
+    "docs/secrets.md and docs/configuration.md describe the {REDIS_PASSWORD}-only app-secrets and the CNPG-sourced DATABASE_URL."
+  ],
+  "verification": [
+    "uv run poe docs-build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,7 @@
+{
+  "task_id": "task-argocd-eso",
+  "task_description": "Adopt Argo CD GitOps + SOPS -> AWS Secrets Manager -> External Secrets Operator, add vendored CRD schema validation, a daily pg_dump->S3 backup CronJob + bootstrap script, replace deploy.yml with a sync-secrets workflow, and update ADR 0001 / SPEC.md / docs. Work directly on branch main in the repo root (no worktree); the first commit is the repo's first commit (unborn HEAD).",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

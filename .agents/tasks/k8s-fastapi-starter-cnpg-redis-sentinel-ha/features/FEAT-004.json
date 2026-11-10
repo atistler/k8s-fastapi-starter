@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Secrets/ESO reconciliation + template placeholder delta (design commits 4 + 5): switch the ExternalSecrets to an explicit two-key data: block (REDIS_PASSWORD for the app, password for the Spotahome operator, both from the one SM property), reduce the example secrets + sync-secrets key-set to {REDIS_PASSWORD}, and update .template/placeholders.yml for the CNPG storage/Barman token delta, files: moves, the docs/configuration.md replace_in addition, and the rewritten NetworkPolicy label-coupling NOTE. Depends on FEAT-002/FEAT-003 (the RedisFailover consumes the `password` key; the CNPG Cluster is the new home for the kept BACKUP_* tokens; the backup files those tokens referenced are deleted).",
+  "status": "pending",
+  "steps": [
+    "Confirm the Spotahome operator reads the key literally named `password` from the Secret in spec.auth.secretPath before finalizing (design §B/§F; this is why ESO must materialize `password` in addition to REDIS_PASSWORD).",
+    "deploy/k8s/overlays/dev/externalsecret.yaml and deploy/k8s/overlays/prod/externalsecret.yaml: replace the single `dataFrom: - extract: {key: <slug>/<env>/app-secrets}` with an explicit `data:` block of TWO entries — `{secretKey: REDIS_PASSWORD, remoteRef: {key: <slug>/<env>/app-secrets, property: REDIS_PASSWORD}}` (app) and `{secretKey: password, remoteRef: {key: <slug>/<env>/app-secrets, property: REDIS_PASSWORD}}` (Spotahome operator). Keep target.name app-secrets, creationPolicy Owner, the secretStoreRef, and the existing header comment (update it to mention the two materialized keys from the one property). Keep the slug `k8s-fastapi-starter` in the remoteRef key (PROJECT_SLUG concern, covered by replace_in).",
+    "deploy/k8s/overlays/dev/secrets.example.yaml and deploy/k8s/overlays/prod/secrets.example.yaml: change stringData to only `REDIS_PASSWORD: \"PLACEHOLDER_REDIS_PASSWORD\"` (drop the DATABASE_URL / PLACEHOLDER_DB_PASSWORD row). Keep the EXAMPLE-ONLY header and metadata.",
+    ".github/workflows/sync-secrets.yml: change the key-set assertion from {DATABASE_URL, REDIS_URL} to {REDIS_PASSWORD} at ALL SEVEN hardcoded sites (design §F finding-3 enumeration): (1) the header comment 'keys DATABASE_URL + REDIS_URL' -> 'key REDIS_PASSWORD'; (3) `expected='[\"DATABASE_URL\",\"REDIS_URL\"]'` -> `expected='[\"REDIS_PASSWORD\"]'`; (4) the extra-key filter `select(. != \"DATABASE_URL\" and . != \"REDIS_URL\")` -> `select(. != \"REDIS_PASSWORD\")`; (5) the missing-key loop `for k in DATABASE_URL REDIS_URL` -> `for k in REDIS_PASSWORD`; (6) both error messages ('(only DATABASE_URL and REDIS_URL are allowed)' -> '(only REDIS_PASSWORD is allowed)'; 'key set must be exactly {DATABASE_URL, REDIS_URL}' -> 'key set must be exactly {REDIS_PASSWORD}'); (7) the success echo 'key shape OK (DATABASE_URL, REDIS_URL)' -> 'key shape OK (REDIS_PASSWORD)'. Leave the `k8s-fastapi-starter` slug strings in SECRET_ID/header ALONE (separate PROJECT_SLUG concern). Keep the per-key loop (reduced to REDIS_PASSWORD) for the specific missing-key message.",
+    ".template/placeholders.yml: REMOVE the `PLACEHOLDER_BACKUP_IMAGE` and `PLACEHOLDER_DB_PASSWORD` fill entries. ADD three fill entries — `PLACEHOLDER_DB_STORAGE_SIZE` and `PLACEHOLDER_DB_STORAGE_CLASS` (files: deploy/k8s/base/postgres-cluster.yaml) and `PLACEHOLDER_BACKUP_PREFIX` (files: deploy/k8s/base/postgres-cluster.yaml; description notes the MANDATORY per-overlay patch to distinct dev/prod prefixes). Update `files:` for `PLACEHOLDER_BACKUP_BUCKET` and `PLACEHOLDER_BACKUP_KMS_KEY_ID` from backup-cronjob.yaml to deploy/k8s/base/postgres-cluster.yaml + scripts/bootstrap_backups.py (KMS_KEY_ID description: CNPG inherits the bucket default SSE-KMS CMK). Update `files:` for `PLACEHOLDER_BACKUP_ROLE_ARN` from backup-serviceaccount.yaml to deploy/k8s/base/postgres-cluster.yaml (the Cluster serviceAccountTemplate IRSA annotation). Leave PLACEHOLDER_BACKUP_KMS_ALIAS and PLACEHOLDER_REDIS_PASSWORD unchanged. Add `docs/configuration.md` to `PROJECT_SLUG.replace_in`. Rewrite the NetworkPolicy label-coupling NOTE to the design §6 text (drop the deleted backup-pod 'silently loses egress' clause; state the app/migration pods are the only pods this policy governs and CNPG/RedisFailover pods are operator-labeled, not slug-labeled)."
+  ],
+  "acceptance_criteria": [
+    "`uv run poe k8s-check` passes (both overlays render the two-key ExternalSecret and the reduced example secret).",
+    "`uv run poe security` passes: gitleaks clean, ruff S clean, scripts/check_sops_encrypted.py green; the example secret files hold only PLACEHOLDER_REDIS_PASSWORD.",
+    "sync-secrets.yml validates exactly {REDIS_PASSWORD} at all seven sites; `python -c \"import yaml; yaml.safe_load(open('.github/workflows/sync-secrets.yml'))\"` and `pre-commit run check-yaml --files .github/workflows/sync-secrets.yml` both pass.",
+    "`rg PLACEHOLDER_` lists only intended tokens: PLACEHOLDER_BACKUP_IMAGE and PLACEHOLDER_DB_PASSWORD are gone; PLACEHOLDER_DB_STORAGE_SIZE, PLACEHOLDER_DB_STORAGE_CLASS, PLACEHOLDER_BACKUP_PREFIX are present; no placeholders.yml entry points at a deleted file."
+  ],
+  "verification": [
+    "uv run poe k8s-check",
+    "uv run poe security",
+    "python -c \"import yaml; yaml.safe_load(open('.github/workflows/sync-secrets.yml'))\"",
+    "pre-commit run check-yaml --files .github/workflows/sync-secrets.yml",
+    "rg PLACEHOLDER_"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

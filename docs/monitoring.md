@@ -8,8 +8,11 @@ recommended [unified service tagging](https://docs.datadoghq.com/getting_started
 
 - **APM traces** for every request, with spans for the FastAPI handlers and the
   Postgres/Redis calls they make.
-- **Log–trace correlation** (`DD_LOGS_INJECTION=true`): `dd.trace_id` and
-  `dd.span_id` are injected into log records so a log line links to its trace.
+- **Log–trace correlation** is **off by default** (`DD_LOGS_INJECTION=false`),
+  because this deployment does not ship logs to Datadog. When enabled, ddtrace
+  injects `dd.trace_id`/`dd.span_id` into log records so a log line links to its
+  trace. The log formatter surfaces these fields whenever they are present, so
+  re-enabling is just a ConfigMap flip (see below) with no code change.
 - **Error tracking**: traces carry exception info, surfaced in the APM error view.
 - **Runtime metrics** (`DD_RUNTIME_METRICS_ENABLED=true`): GC, memory, and
   thread metrics for the Python process, sent over DogStatsD (UDP 8125).
@@ -36,17 +39,17 @@ cluster agent's own Secret, managed by the platform team.
 
 The application (`ddtrace`) reads these variables. The manifests supply them:
 
-| Variable | Value | Source in cluster |
-|---|---|---|
-| `DD_SERVICE` | `k8s-fastapi-starter` | pod label `tags.datadoghq.com/service` via `fieldRef` |
-| `DD_ENV` | `dev` / `prod` | pod label `tags.datadoghq.com/env` via `fieldRef` |
-| `DD_VERSION` | image tag (placeholder `0.0.0`) | pod label `tags.datadoghq.com/version` via `fieldRef` |
-| `DD_AGENT_HOST` | node host IP | `status.hostIP` via `fieldRef` |
-| `DD_TRACE_AGENT_PORT` | `8126` | ConfigMap `app-config` |
-| `DD_TRACE_ENABLED` | `true` (API) / `false` (migration Job) | ConfigMap, overridden on the Job |
-| `DD_LOGS_INJECTION` | `true` | ConfigMap `app-config` |
-| `DD_RUNTIME_METRICS_ENABLED` | `true` | ConfigMap `app-config` |
-| `DD_PROFILING_ENABLED` | `false` | ConfigMap `app-config` |
+| Variable                     | Value                                  | Source in cluster                                     |
+| ---------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| `DD_SERVICE`                 | `k8s-fastapi-starter`                  | pod label `tags.datadoghq.com/service` via `fieldRef` |
+| `DD_ENV`                     | `dev` / `prod`                         | pod label `tags.datadoghq.com/env` via `fieldRef`     |
+| `DD_VERSION`                 | image tag (placeholder `0.0.0`)        | pod label `tags.datadoghq.com/version` via `fieldRef` |
+| `DD_AGENT_HOST`              | node host IP                           | `status.hostIP` via `fieldRef`                        |
+| `DD_TRACE_AGENT_PORT`        | `8126`                                 | ConfigMap `app-config`                                |
+| `DD_TRACE_ENABLED`           | `true` (API) / `false` (migration Job) | ConfigMap, overridden on the Job                      |
+| `DD_LOGS_INJECTION`          | `false` (logs not shipped to Datadog)  | ConfigMap `app-config`                                |
+| `DD_RUNTIME_METRICS_ENABLED` | `true`                                 | ConfigMap `app-config`                                |
+| `DD_PROFILING_ENABLED`       | `false`                                | ConfigMap `app-config`                                |
 
 Non-secret flags and the port live in the ConfigMap (`deploy/k8s/base/configmap.yaml`).
 The service/env/version values come from the pod's own labels, not the ConfigMap,
@@ -114,6 +117,11 @@ allows.
   over the ConfigMap value, so short-lived migration pods produce no APM noise.
 - **Runtime metrics / profiling:** toggle `DD_RUNTIME_METRICS_ENABLED` and
   `DD_PROFILING_ENABLED` in the ConfigMap.
+- **Log–trace correlation:** off by default (`DD_LOGS_INJECTION: "false"`).
+  Set it to `"true"` in the ConfigMap if you start shipping container logs to
+  Datadog and want log lines to link to their traces. No code change is needed —
+  the log formatter already surfaces the `dd.*` fields whenever ddtrace injects
+  them.
 
 ## Verify the manifests
 
