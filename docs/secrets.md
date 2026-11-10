@@ -6,7 +6,19 @@ touches ciphertext.
 
 ## How it works
 
-The chain is: **SOPS (git) → CI `sync-secrets` → AWS Secrets Manager → ESO → the `app-secrets` Kubernetes Secret.**
+```mermaid
+flowchart TD
+    Git["Git: SOPS-encrypted secrets"] --> CI["GitHub Actions: sync-secrets"]
+    KMS["AWS KMS"] -.->|Decrypt via CI OIDC role| CI
+    CI -->|Write validated value map| SM["AWS Secrets Manager"]
+    SM -->|Read via ESO IRSA role| ESO["External Secrets Operator"]
+    ESO --> Secret["Kubernetes Secret: app-secrets"]
+    Secret -->|Environment at container start| Pods["API and migration containers"]
+```
+
+Git holds ciphertext. CI decrypts and validates the value map, Secrets Manager
+holds the runtime values, and ESO copies them into Kubernetes. Argo CD manages
+the `ExternalSecret` pointer rather than the secret values.
 
 - `.sops.yaml` holds the creation rules. Rules are evaluated in order and the first match wins.
   - `secrets\.dev\.yaml$` and `secrets\.prod\.yaml$` use an AWS KMS key group. The ARN in the template is a placeholder.
@@ -28,6 +40,19 @@ The chain is: **SOPS (git) → CI `sync-secrets` → AWS Secrets Manager → ESO
 - **Default Secrets Manager key, no secrets CMK.** The isolation a CMK key policy would give is already provided by two
   IAM roles: the CI OIDC role is write-only (`PutSecretValue`/`CreateSecret`/`DescribeSecret`) and ESO's IRSA role is
   read-only (`GetSecretValue`/`DescribeSecret`). The only KMS CMK this template provisions is for the S3 backup bucket.
+
+### CI permissions and failure handling
+
+The CI OIDC role needs `kms:Decrypt` for the SOPS key, plus
+`secretsmanager:PutSecretValue`, `secretsmanager:CreateSecret`, and
+`secretsmanager:DescribeSecret` scoped to
+`arn:aws:secretsmanager:*:*:secret:k8s-fastapi-starter/*/app-secrets-*`.
+The workflow tries `put-secret-value` first, then `create-secret` only if the
+secret does not exist. A secret scheduled for deletion must be restored by an
+operator before the workflow can be retried.
+
+Pull requests perform no Secrets Manager writes. Decrypting a real file still
+requires KMS access; a fork without that access cannot complete the decrypt check.
 
 ## Edit a secret
 

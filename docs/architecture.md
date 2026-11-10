@@ -1,17 +1,21 @@
 # Architecture
 
+The API stores items in Postgres and caches individual reads in Redis. Kubernetes
+runs the API and migration Job; Argo CD manages delivery. Start here for the runtime
+design, then use [Deployment](deployment.md) for rollout and bootstrap details.
+
 ## Components
 
-```text
-            +-----------------+
- client --> |  FastAPI (uvicorn)  |--- SQL (asyncpg) ---> PostgreSQL 17
-            |  app.main       |
-            |                 |--- redis.asyncio ---> Redis 7
-            +-----------------+
-                     ^
-                     | migration Job runs first (alembic upgrade head)
+```mermaid
+flowchart LR
+    Client[HTTP client] --> API["Uvicorn / FastAPI"]
+    API -->|SQLAlchemy / asyncpg| DB[(PostgreSQL 17)]
+    API -->|redis.asyncio| Cache[(Redis 7)]
+    Migration["Alembic migration Job"] --> DB
+    API -.->|Traces and runtime metrics| Agent["Node-local Datadog Agent"]
 ```
 
+- **HTTP server.** Uvicorn accepts HTTP connections and runs the FastAPI ASGI application.
 - **Application factory.** `app.main:create_app` builds the app. Uvicorn runs it with
   `uvicorn app.main:create_app --factory`.
 - **Lifespan.** Startup creates the async SQLAlchemy engine and the Redis client and stores them on
@@ -49,11 +53,37 @@ deploy/k8s/      Kustomize base and overlays
 
 ## Request flow for `GET /api/v1/items/{id}`
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as FastAPI
+    participant Cache as Redis
+    participant DB as Postgres
+    Client->>API: GET /api/v1/items/{id}
+    API->>Cache: GET items:{id}
+    alt Cache hit
+        Cache-->>API: Cached item
+        API-->>Client: 200 ItemRead
+    else Cache miss
+        Cache-->>API: No cached value
+        API->>DB: Load item by ID
+        DB-->>API: Item or missing
+        alt Item found
+            API->>Cache: SET item, TTL 300 seconds
+            API-->>Client: 200 ItemRead
+        else Item missing
+            API-->>Client: 404 item not found
+        end
+    end
+```
+
 1. The handler asks Redis for the cached item.
 2. On a miss, it loads the row through the session from `get_session`.
 3. It stores the result in Redis and returns the Pydantic response model.
 
-The sample exists only to prove the wiring. Business logic belongs in your service.
+Updates and deletes invalidate the item key after the database commit. A concurrent
+reader can still repopulate a stale value; the 300-second TTL bounds that window.
+The sample exists to prove the wiring. Business logic belongs in your service.
 
 ## Kubernetes shape
 

@@ -77,10 +77,10 @@ The dev overlay patches the `env` label to `dev`; the prod overlay patches it to
 ## How version is wired at deploy
 
 `tags.datadoghq.com/version` (and `app.kubernetes.io/version`) are a placeholder
-`0.0.0` in git. **TODO (CD):** the deploy pipeline should set this label to the
-image tag at render time, alongside the existing `kustomize edit set image`
-step, so `DD_VERSION` matches the deployed artifact. Until that is wired,
-`DD_VERSION` reports `0.0.0`.
+`0.0.0` in git. When selecting an image for an overlay, update both labels to
+match its tag so `DD_VERSION` identifies the deployed artifact. The template
+does not automate image selection or version-label updates; until configured,
+`DD_VERSION` reports `0.0.0`. See [Deployment](deployment.md#open-items).
 
 ## Admission Controller (optional)
 

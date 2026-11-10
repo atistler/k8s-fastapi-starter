@@ -177,7 +177,7 @@ rename:
     keep_as_is:
       # These describe the TEMPLATE itself, not the new service. Do not rename.
       - SPEC.md
-      - README.md
+      - docs/README.md
       - AGENTS.md
       - CLAUDE.md
       - CHANGELOG.md

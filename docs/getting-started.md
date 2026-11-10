@@ -18,8 +18,12 @@ You do not need to install Python yourself.
 
 ## Quick start
 
+Run these commands from the repository root. Copy the example configuration before
+starting the API or running migrations; its local credentials match Docker Compose.
+
 ```bash
 uv run poe install     # uv sync --all-groups
+cp .env.example .env   # local-only configuration; keep it out of git
 uv run poe up          # start Postgres 17 and Redis 7 with Docker Compose
 uv run poe db-upgrade  # apply Alembic migrations to DATABASE_URL
 uv run poe run         # start the API with auto-reload on http://localhost:8000
@@ -44,6 +48,21 @@ Install the git hooks once per clone:
 ```bash
 uv run poe hooks
 ```
+
+Use `uv run poe down` when you are finished. Compose keeps the Postgres data volume
+so the next session can reuse it.
+
+## If something fails
+
+| Symptom | Check |
+|---|---|
+| Docker cannot connect | Start Docker Desktop or your container runtime, then retry `uv run poe up`. |
+| Settings validation fails | Confirm `.env` exists and contains `DATABASE_URL` and `REDIS_URL`. |
+| `/readyz` returns 503 | Check local services are running and the `.env` credentials match `docker-compose.yml`. |
+| A table does not exist | Run `uv run poe db-upgrade` against the same database as the API. |
+
+See [Configuration](configuration.md) for environment variables and
+[Contributing](contributing.md) for hooks and the pull request workflow.
 
 ## Tasks
 

@@ -79,7 +79,6 @@ GitOps via **Argo CD** is adopted (it was previously a non-goal); deployment is 
 ├── .dockerignore
 ├── .gitignore
 ├── Dockerfile
-├── README.md
 ├── SPEC.md                     # this file
 ├── catalog-info.yml            # Backstage Component
 ├── cliff.toml                  # git-cliff configuration
@@ -144,9 +143,11 @@ GitOps via **Argo CD** is adopted (it was previously a non-goal); deployment is 
 │               ├── externalsecret.yaml     # ESO ExternalSecret -> app-secrets (prod)
 │               └── secrets.example.yaml    # committed placeholders; secrets.prod.yaml (SOPS) synced to Secrets Manager by CI, never applied directly
 ├── docs/
-│   ├── index.md
+│   ├── README.md              # single overview and TechDocs homepage
 │   ├── getting-started.md
 │   ├── architecture.md
+│   ├── contributing.md        # contributor workflow, hooks, and docs maintenance
+│   ├── ci.md                  # GitHub Actions workflows and gates
 │   ├── configuration.md
 │   ├── database-migrations.md
 │   ├── deployment.md
@@ -381,6 +382,7 @@ Actions must be pinned to a major version at minimum. Pinning to full SHAs is re
 
 - `catalog-info.yml` defines a `Component` with `type: service`, `lifecycle: experimental`, `owner` placeholder, and `backstage.io/techdocs-ref: dir:.`. Annotate with `github.com/project-slug`.
 - `mkdocs.yml` at the root uses `docs_dir: docs` and the Material theme. TechDocs builds it from the repo root.
+- `docs/README.md` is the single repository overview and the MkDocs/TechDocs homepage; there is no root README or separate `docs/index.md`.
 - `docs/` holds the operator and developer docs. The ADR index is `docs/adr/`. Any change to a decision in SPEC.md §2 requires a new ADR.
 
 ---

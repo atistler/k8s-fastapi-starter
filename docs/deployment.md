@@ -7,6 +7,26 @@ Deployment is **GitOps via Argo CD**, not a CI apply job. Argo CD applies the re
 Argo CD and ESO are **assumed pre-installed, cluster-level**, like the Datadog Agent — this repo does not install
 either.
 
+## Delivery flow
+
+```mermaid
+flowchart TD
+    Main["Change merged to main"] --> CI["GitHub Actions: build and scan image"]
+    CI --> Registry["GHCR: image tagged with commit SHA"]
+    Registry -.-> Selection["Select overlay image tag and matching version labels"]
+    Selection --> Git["Commit updated Kustomize overlay"]
+    Git --> Argo["Argo CD sync: dev automatic, prod manual"]
+    Argo --> Job["PreSync: Alembic migration Job"]
+    Job --> Result{Migration succeeds?}
+    Result -->|Yes| Rollout["Apply resources and roll out API"]
+    Result -->|No| Stop["Sync fails before Deployment update"]
+```
+
+Image publication and overlay updates are separate steps. The template does not
+automatically choose a deployed image tag; resolve that [open item](#open-items)
+before the first deployment. The migration Job needs configuration, credentials,
+and a reachable database before it starts.
+
 > **ESO version floor: v0.10.0.** The `ExternalSecret`/`ClusterSecretStore` manifests use `apiVersion:
 > external-secrets.io/v1`, and ESO only promoted that API group from `v1beta1` to `v1` in **v0.10.0**. A cluster on an
 > older ESO serves only `v1beta1` and rejects these manifests (`no matches for kind "ExternalSecret" in version
@@ -66,24 +86,16 @@ adjusts when registering each `Application` in their platform's Argo CD instance
    before each sync, so the old commit-SHA-append naming dance is gone; the overlays still rename the Job per
    environment (`app-migrate-dev` / `app-migrate-prod`).
 
-## Secrets: `sync-secrets` workflow
+## Secrets synchronization
 
-`.github/workflows/sync-secrets.yml` is a standalone, path-filtered workflow (triggers only on
-`deploy/k8s/overlays/**/secrets.*.yaml` changes). On push to `main` it:
+The path-filtered `sync-secrets.yml` workflow decrypts committed SOPS files using
+AWS OIDC, validates the two required keys, and writes them to Secrets Manager.
+ESO updates `app-secrets` independently of Argo CD. See [Secrets](secrets.md)
+for the value flow, IAM permissions, and rotation procedure, and
+[Continuous integration](ci.md) for the workflow overview.
 
-1. Assumes the AWS OIDC role (`vars.AWS_DEPLOY_ROLE_ARN` in `vars.AWS_REGION`). No long-lived keys.
-2. Decrypts `secrets.<env>.yaml` with SOPS and extracts the value map.
-3. Validates the key set is exactly `{DATABASE_URL, REDIS_URL}` (failing with the offending key name, never its value).
-4. Writes one JSON entry `k8s-fastapi-starter/<env>/app-secrets` to AWS Secrets Manager (`put-secret-value`, falling
-   back to `create-secret` only on `ResourceNotFoundException`).
-
-Fork PRs run only the decrypt + key-shape check with no AWS access. The template ships only `secrets.example.yaml`, so
-the workflow is a no-op until a real `secrets.<env>.yaml` is committed.
-
-The OIDC role needs `secretsmanager:PutSecretValue`, `secretsmanager:CreateSecret`, and `secretsmanager:DescribeSecret`
-scoped to `arn:aws:secretsmanager:*:*:secret:k8s-fastapi-starter/*/app-secrets-*`, on top of the `kms:Decrypt` it
-already has for SOPS. The **default** Secrets Manager key is intentional: write-only (CI) and read-only (ESO) IAM roles
-give the isolation a CMK would, so no secrets CMK is provisioned — see [Secrets](secrets.md).
+Only placeholder examples ship with the template. Secrets synchronization is a
+no-op until a real encrypted `secrets.<env>.yaml` exists.
 
 ## Database backups
 
@@ -121,12 +133,14 @@ kubectl apply -k deploy/k8s/overlays/dev
 Do **not** try to break-glass a secret by `sops --decrypt … | kubectl apply -f -`: ESO's refresh will overwrite it.
 Push the value to Secrets Manager (or edit the `ExternalSecret`) instead. See [Secrets](secrets.md).
 
-## Rough edges (documented, not engineered around)
+## Bootstrap and rotation caveats
 
-- **First-environment bootstrap ordering.** Argo CD does not understand ESO CRD health, so on a brand-new environment it
-  will not "wait" for ESO to materialize `app-secrets` the way it waits for the migration Job PreSync hook. Let the first
-  ESO sync settle before the first migration run. In steady state the Secret already exists from prior syncs, so this is
-  a one-time, manual-attention event, not a recurring problem.
+- **First-environment bootstrap ordering.** The PreSync Job runs before the regular
+  sync resources, including `app-config` and the `ExternalSecret`. Bootstrap those
+  resources and let ESO materialize `app-secrets` before the first full sync.
+  Confirm the database is reachable too. A PreSync hook cannot rely on resources
+  that will only be created later in the same sync. In steady state these
+  prerequisites already exist.
 - **Rotation does not restart running pods.** Env vars are read at container start, so rotating a secret updates the
   `app-secrets` Secret but does not restart already-running pods. A controller such as Reloader would close that gap;
   it is a possible **future** addition and is not part of this template.

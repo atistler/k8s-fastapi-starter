@@ -27,24 +27,39 @@ theme:
 plugins:
   - search
 
+validation:
+  links:
+    anchors: warn
+
 markdown_extensions:
   - admonition
   - attr_list
   - tables
+  # SuperFences defaults to fence_code_format; omit the Python YAML tag so
+  # check-yaml can safely parse this file.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
   - toc:
       permalink: true
 
 nav:
-  - Home: index.md
-  - Getting started: getting-started.md
-  - Architecture: architecture.md
-  - Configuration: configuration.md
-  - Database migrations: database-migrations.md
-  - Deployment: deployment.md
-  - Monitoring: monitoring.md
-  - Secrets: secrets.md
-  - Security: security.md
-  - Releasing: releasing.md
+  - Home: README.md
+  - Getting started:
+      - Local setup: getting-started.md
+      - Architecture: architecture.md
+  - Development:
+      - Contributing: contributing.md
+      - Configuration: configuration.md
+      - Database migrations: database-migrations.md
+      - Continuous integration: ci.md
+  - Operations:
+      - Deployment: deployment.md
+      - Secrets: secrets.md
+      - Monitoring: monitoring.md
+      - Security: security.md
+      - Releasing: releasing.md
   - Decisions:
       - ADR 0001 - Technology choices: adr/0001-technology-choices.md
       - ADR 0002 - Task runner (poe): adr/0002-task-runner-poe.md

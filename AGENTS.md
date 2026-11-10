@@ -30,7 +30,7 @@ It defines five kinds of entry:
 - **rename** — working defaults that must become the new project's identity:
   `PROJECT_SLUG` (default `k8s-fastapi-starter`), `PROJECT_TITLE`,
   `PROJECT_DESCRIPTION`. Each lists `replace_in` and `keep_as_is`. **Do not**
-  rename the slug inside `SPEC.md`, `README.md`, `AGENTS.md`, or `.template/` —
+  rename the slug inside `SPEC.md`, `docs/README.md`, `AGENTS.md`, or `.template/` —
   those describe the template itself.
 - **keep** — intentionally generic; leave alone (the import package stays `app`).
 - **runtime** — set by CD, not during init (the `0.0.0` image tag).
@@ -46,7 +46,7 @@ It defines five kinds of entry:
 3. Apply the replacements. For `rename`, change occurrences only in `replace_in`
    and never in `keep_as_is`. Do not touch `keep`, `runtime`, or `external`.
 4. Remove the `.template/` directory and the "Creating a real repository…"
-   section of `README.md` (the template-only parts).
+   section of `docs/README.md` (the template-only parts).
 5. Run `uv run poe check`, then `uv run poe k8s-check` and `uv run poe docs-build`.
 6. Confirm `rg PLACEHOLDER_` returns nothing, then make the first commit
    (`chore: initialize from template`).
